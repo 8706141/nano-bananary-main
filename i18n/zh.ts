@@ -59,7 +59,19 @@ export default {
     moduleDeactivated: "模块已停用",
     noModulesFound: "未找到模块",
     active: "激活",
-    inactive: "未激活"
+    inactive: "未激活",
+    addModule: "添加模块",
+    deleteModule: "删除模块",
+    editName: "编辑名称",
+    moduleName: "模块名称",
+    moduleNamePlaceholder: "输入模块名称...",
+    confirmDelete: "确定要删除此模块吗？",
+    moduleAdded: "模块添加成功",
+    moduleDeleted: "模块删除成功",
+    nameUpdated: "名称更新成功",
+    newModule: "新模块",
+    newModulePrompt: "输入新模块的提示词...",
+    selectCategory: "选择类别"
   },
   settings: {
     title: "设置",

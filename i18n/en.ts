@@ -59,7 +59,19 @@ export default {
     moduleDeactivated: "Module deactivated",
     noModulesFound: "No modules found",
     active: "Active",
-    inactive: "Inactive"
+    inactive: "Inactive",
+    addModule: "Add Module",
+    deleteModule: "Delete Module",
+    editName: "Edit Name",
+    moduleName: "Module Name",
+    moduleNamePlaceholder: "Enter module name...",
+    confirmDelete: "Are you sure you want to delete this module?",
+    moduleAdded: "Module added successfully",
+    moduleDeleted: "Module deleted successfully",
+    nameUpdated: "Name updated successfully",
+    newModule: "New Module",
+    newModulePrompt: "Enter prompt for the new module...",
+    selectCategory: "Select category"
   },
   settings: {
     title: "Settings",

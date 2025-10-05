@@ -29,6 +29,12 @@ const ModuleManager: React.FC<ModuleManagerProps> = ({
   const [customPrompt, setCustomPrompt] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('all');
+  const [isAddingModule, setIsAddingModule] = useState(false);
+  const [newModuleName, setNewModuleName] = useState('');
+  const [newModulePrompt, setNewModulePrompt] = useState('');
+  const [newModuleCategory, setNewModuleCategory] = useState('custom');
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editingModuleName, setEditingModuleName] = useState('');
 
   // 初始化模块列表
   useEffect(() => {
@@ -46,25 +52,42 @@ const ModuleManager: React.FC<ModuleManagerProps> = ({
 
   // 保存模块更改
   const handleSaveModules = () => {
+    // 首先处理现有的转换
     const updatedTransformations = transformations.map(trans => {
       const module = modules.find(m => m.id === trans.key);
       if (module) {
         return {
           ...trans,
           prompt: module.prompt,
-          // 如果模块被禁用，我们可以从列表中移除它，或者添加一个标记
         };
       }
       return trans;
     });
     
-    // 过滤掉被禁用的模块
+    // 过滤掉被禁用的现有模块
     const activeTransformations = updatedTransformations.filter(trans => {
       const module = modules.find(m => m.id === trans.key);
       return module?.isActive;
     });
     
-    onUpdateTransformations(activeTransformations);
+    // 添加自定义模块（以custom_开头的ID）
+    const customModules = modules.filter(module => 
+      module.id.startsWith('custom_') && module.isActive
+    );
+    
+    // 将自定义模块转换为Transformation格式并添加到列表中
+    const customTransformations: Transformation[] = customModules.map(module => ({
+      key: module.id,
+      titleKey: module.name, // 直接使用名称作为titleKey
+      prompt: module.prompt,
+      category: module.category,
+      items: [] // 自定义模块没有子项
+    }));
+    
+    // 合并现有转换和自定义转换
+    const allTransformations = [...activeTransformations, ...customTransformations];
+    
+    onUpdateTransformations(allTransformations);
     onClose();
   };
 
@@ -108,6 +131,70 @@ const ModuleManager: React.FC<ModuleManagerProps> = ({
     setModules(defaultModules);
     setSelectedModule(null);
     setCustomPrompt('');
+  };
+
+  // 添加新模块
+  const handleAddModule = () => {
+    if (newModuleName.trim() && newModulePrompt.trim()) {
+      const newModule: Module = {
+        id: `custom_${Date.now()}`,
+        name: newModuleName.trim(),
+        prompt: newModulePrompt.trim(),
+        isActive: true,
+        category: newModuleCategory
+      };
+      
+      setModules(prev => [...prev, newModule]);
+      setNewModuleName('');
+      setNewModulePrompt('');
+      setIsAddingModule(false);
+      
+      // 显示成功消息（在实际应用中，可能需要使用toast或通知组件）
+      alert(t('moduleManager.moduleAdded'));
+    }
+  };
+
+  // 删除模块
+  const handleDeleteModule = (moduleId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (window.confirm(t('moduleManager.confirmDelete'))) {
+      setModules(prev => prev.filter(module => module.id !== moduleId));
+      
+      if (selectedModule?.id === moduleId) {
+        setSelectedModule(null);
+        setCustomPrompt('');
+      }
+      
+      // 显示成功消息
+      alert(t('moduleManager.moduleDeleted'));
+    }
+  };
+
+  // 开始编辑模块名称
+  const startEditingName = (module: Module, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingModuleName(module.name);
+    setIsEditingName(true);
+    setSelectedModule(module);
+  };
+
+  // 保存编辑后的模块名称
+  const saveEditedName = () => {
+    if (selectedModule && editingModuleName.trim()) {
+      setModules(prev => prev.map(module => 
+        module.id === selectedModule.id 
+          ? { ...module, name: editingModuleName.trim() }
+          : module
+      ));
+      
+      setSelectedModule(prev => prev ? { ...prev, name: editingModuleName.trim() } : null);
+      setIsEditingName(false);
+      setEditingModuleName('');
+      
+      // 显示成功消息
+      alert(t('moduleManager.nameUpdated'));
+    }
   };
 
   // 过滤模块
@@ -162,6 +249,15 @@ const ModuleManager: React.FC<ModuleManagerProps> = ({
                   </option>
                 ))}
               </select>
+              <button
+                onClick={() => setIsAddingModule(true)}
+                className="py-2 px-4 bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] text-[var(--text-on-accent)] font-semibold rounded-lg shadow-lg shadow-[var(--accent-shadow)] hover:from-[var(--accent-primary-hover)] hover:to-[var(--accent-secondary-hover)] transition-all duration-200 flex items-center gap-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
+                </svg>
+                {t('moduleManager.addModule')}
+              </button>
             </div>
 
             <div className="flex-grow overflow-y-auto pr-2">
@@ -179,7 +275,43 @@ const ModuleManager: React.FC<ModuleManagerProps> = ({
                     <div className="flex justify-between items-start">
                       <div className="flex-grow">
                         <div className="flex items-center gap-2">
-                          <h3 className="font-medium text-[var(--text-primary)]">{module.name}</h3>
+                          {isEditingName && selectedModule?.id === module.id ? (
+                            <div className="flex items-center gap-2 w-full">
+                              <input
+                                type="text"
+                                value={editingModuleName}
+                                onChange={(e) => setEditingModuleName(e.target.value)}
+                                className="flex-grow p-1 bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-[var(--accent-primary)] transition-colors"
+                                placeholder={t('moduleManager.moduleNamePlaceholder')}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  saveEditedName();
+                                }}
+                                className="p-1 text-green-500 hover:bg-green-500/20 rounded-full"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setIsEditingName(false);
+                                  setEditingModuleName('');
+                                }}
+                                className="p-1 text-red-500 hover:bg-red-500/20 rounded-full"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                </svg>
+                              </button>
+                            </div>
+                          ) : (
+                            <h3 className="font-medium text-[var(--text-primary)]">{module.name}</h3>
+                          )}
                           <span className={`text-xs px-2 py-1 rounded-full ${
                             module.category === 'category' 
                               ? 'bg-blue-500/20 text-blue-500' 
@@ -192,27 +324,52 @@ const ModuleManager: React.FC<ModuleManagerProps> = ({
                           {module.prompt || t('moduleManager.promptPlaceholder')}
                         </p>
                       </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleToggleModule(module.id);
-                        }}
-                        className={`ml-2 p-1 rounded-full ${
-                          module.isActive 
-                            ? 'text-green-500 hover:bg-green-500/20' 
-                            : 'text-gray-500 hover:bg-gray-500/20'
-                        }`}
-                      >
-                        {module.isActive ? (
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
-                        ) : (
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                          </svg>
+                      <div className="flex flex-col gap-1 ml-2">
+                        {!isEditingName && (
+                          <>
+                            <button
+                              onClick={(e) => startEditingName(module, e)}
+                              className="p-1 rounded-full text-blue-500 hover:bg-blue-500/20"
+                              title={t('moduleManager.editName')}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={(e) => handleDeleteModule(module.id, e)}
+                              className="p-1 rounded-full text-red-500 hover:bg-red-500/20"
+                              title={t('moduleManager.deleteModule')}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleModule(module.id);
+                              }}
+                              className={`p-1 rounded-full ${
+                                module.isActive 
+                                  ? 'text-green-500 hover:bg-green-500/20' 
+                                  : 'text-gray-500 hover:bg-gray-500/20'
+                              }`}
+                              title={module.isActive ? t('moduleManager.active') : t('moduleManager.inactive')}
+                            >
+                              {module.isActive ? (
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
+                              ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                </svg>
+                              )}
+                            </button>
+                          </>
                         )}
-                      </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -220,9 +377,76 @@ const ModuleManager: React.FC<ModuleManagerProps> = ({
             </div>
           </div>
 
-          {/* 右侧：编辑模块 */}
+          {/* 右侧：编辑模块或新增模块 */}
           <div className="w-full md:w-1/2 flex flex-col">
-            {selectedModule ? (
+            {isAddingModule ? (
+              <div className="flex-grow flex flex-col">
+                <h3 className="text-lg font-semibold text-[var(--accent-primary)] mb-4">
+                  {t('moduleManager.addModule')}
+                </h3>
+                
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">
+                    {t('moduleManager.moduleName')}
+                  </label>
+                  <input
+                    type="text"
+                    value={newModuleName}
+                    onChange={(e) => setNewModuleName(e.target.value)}
+                    className="w-full p-3 bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-[var(--accent-primary)] transition-colors placeholder-[var(--text-tertiary)]"
+                    placeholder={t('moduleManager.moduleNamePlaceholder')}
+                  />
+                </div>
+                
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">
+                    {t('moduleManager.editPrompt')}
+                  </label>
+                  <textarea
+                    value={newModulePrompt}
+                    onChange={(e) => setNewModulePrompt(e.target.value)}
+                    rows={10}
+                    className="w-full p-3 bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-[var(--accent-primary)] transition-colors placeholder-[var(--text-tertiary)]"
+                    placeholder={t('moduleManager.newModulePrompt')}
+                  />
+                </div>
+                
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">
+                    {t('moduleManager.selectCategory')}
+                  </label>
+                  <select
+                    value={newModuleCategory}
+                    onChange={(e) => setNewModuleCategory(e.target.value)}
+                    className="w-full p-3 bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-[var(--accent-primary)] transition-colors"
+                  >
+                    <option value="custom">{t('moduleManager.categoryCustom')}</option>
+                    <option value="viral">{t('moduleManager.categoryViral')}</option>
+                    <option value="photo">{t('moduleManager.categoryPhoto')}</option>
+                    <option value="design">{t('moduleManager.categoryDesign')}</option>
+                  </select>
+                </div>
+
+                <div className="mt-auto flex gap-2">
+                  <button
+                    onClick={handleAddModule}
+                    className="flex-1 py-2 px-4 bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] text-[var(--text-on-accent)] font-semibold rounded-lg shadow-lg shadow-[var(--accent-shadow)] hover:from-[var(--accent-primary-hover)] hover:to-[var(--accent-secondary-hover)] transition-all duration-200"
+                  >
+                    {t('moduleManager.save')}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsAddingModule(false);
+                      setNewModuleName('');
+                      setNewModulePrompt('');
+                    }}
+                    className="py-2 px-4 bg-[var(--bg-secondary)] border border-[var(--border-primary)] text-[var(--text-primary)] font-semibold rounded-lg hover:bg-[var(--bg-hover)] transition-colors"
+                  >
+                    {t('moduleManager.cancel')}
+                  </button>
+                </div>
+              </div>
+            ) : selectedModule ? (
               <div className="flex-grow flex flex-col">
                 <h3 className="text-lg font-semibold text-[var(--accent-primary)] mb-4">
                   {t('moduleManager.editPrompt')}: {selectedModule.name}
